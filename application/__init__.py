@@ -1,44 +1,25 @@
-"""
-Main Flask Application Initialization
-"""
 from flask import Flask
-from flask_bootstrap import Bootstrap5
+from flask_sqlalchemy import SQLAlchemy
 from flask_login import LoginManager
-from flask_migrate import Migrate
-from flask_wtf import CSRFProtect
 
-
-from application.database import db,User
-import config
-from application.bp.homepage import bp_homepage
-from application.bp.authentication import authentication
-
-migrate = Migrate()
-csrf = CSRFProtect()
+db = SQLAlchemy()
 login_manager = LoginManager()
+login_manager.login_view = 'authentication.login'
 
 def init_app():
-    """Initialize the core application."""
-    app = Flask(__name__, instance_relative_config=False)
-    app.config.from_object(config.Config())
-    csrf.init_app(app)
-    bootstrap = Bootstrap5(app)
+    app = Flask(__name__)
+    app.config.from_object('config.Config')
 
-    login_manager.login_view = "authentication.login"
-    login_manager.init_app(app)
-
-    # Initialize Plugins
     db.init_app(app)
-    migrate.init_app(app, db)
+    login_manager.init_app(app)
+    from application.database.models import User
 
-    with app.app_context():
+    @login_manager.user_loader
+    def load_user(user_id):
+        return User.query.get(int(user_id))
 
-        blueprints = [bp_homepage, authentication]
-        # Register Blueprints
-        for blueprint in blueprints:
-            app.register_blueprint(blueprint)
-        return app
+    # Import and register blueprint AFTER app is ready
+    from application.bp.authentication.routes import authentication
+    app.register_blueprint(authentication)
 
-@login_manager.user_loader
-def user_loader(user_id):
-    return User.query.get(user_id)
+    return app
